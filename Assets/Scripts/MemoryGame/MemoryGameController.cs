@@ -19,14 +19,36 @@ public class MemoryGameController : MonoBehaviour
     [SerializeField] private float previewTime = 2f;
     [SerializeField] private float mismatchDelay = 0.6f;
 
+    [Header("Progression")]
+    [SerializeField] private float levelCompleteDelay = 1.5f;
+    [SerializeField] private int maxRows = 4;
+    [SerializeField] private int maxColumns = 4;
+    [SerializeField] private int sizeIncreaseEveryLevels = 1;
+    [SerializeField] private int rowIncreaseStep = 1;
+    [SerializeField] private int columnIncreaseStep = 1;
+    [SerializeField] private float previewDecreasePerLevel = 0.1f;
+    [SerializeField] private float minPreviewTime = 0.5f;
+    [SerializeField] private float mismatchDecreasePerLevel = 0.05f;
+    [SerializeField] private float minMismatchDelay = 0.2f;
+
     private readonly List<CardView> cards = new List<CardView>();
     private CardView firstSelection;
     private CardView secondSelection;
     private bool isBusy;
     private int matchedCount;
+    private int levelIndex;
+    private int startRows;
+    private int startColumns;
+    private float startPreviewTime;
+    private float startMismatchDelay;
 
     private void Start()
     {
+        EnsureEvenGrid();
+        startRows = rows;
+        startColumns = columns;
+        startPreviewTime = previewTime;
+        startMismatchDelay = mismatchDelay;
         StartCoroutine(StartLevel());
     }
 
@@ -57,21 +79,19 @@ public class MemoryGameController : MonoBehaviour
             return;
         }
 
-        if (cardFaces.Count < totalCards / 2)
+        if (cardFaces.Count == 0)
         {
-            Debug.LogError("Not enough card faces to fill the grid.");
+            Debug.LogError("No card faces assigned.");
             return;
         }
 
-        var availableFaces = new List<Sprite>(cardFaces);
-        Shuffle(availableFaces);
-        availableFaces = availableFaces.GetRange(0, totalCards / 2);
-
-        var deck = new List<(int id, Sprite sprite)>();
-        for (int i = 0; i < availableFaces.Count; i++)
+        int pairsNeeded = totalCards / 2;
+        var deck = new List<(int id, Sprite sprite)>(totalCards);
+        for (int i = 0; i < pairsNeeded; i++)
         {
-            deck.Add((i, availableFaces[i]));
-            deck.Add((i, availableFaces[i]));
+            int faceIndex = i % cardFaces.Count;
+            deck.Add((i, cardFaces[faceIndex]));
+            deck.Add((i, cardFaces[faceIndex]));
         }
 
         Shuffle(deck);
@@ -132,7 +152,53 @@ public class MemoryGameController : MonoBehaviour
 
         if (matchedCount >= cards.Count)
         {
-            Debug.Log("Level complete.");
+            StartCoroutine(AdvanceLevel());
+        }
+    }
+
+    private IEnumerator AdvanceLevel()
+    {
+        isBusy = true;
+        yield return new WaitForSeconds(levelCompleteDelay);
+        levelIndex++;
+        ApplyDifficulty();
+        isBusy = false;
+        StartCoroutine(StartLevel());
+    }
+
+    private void ApplyDifficulty()
+    {
+        int sizeIncrease = sizeIncreaseEveryLevels > 0 ? levelIndex / sizeIncreaseEveryLevels : levelIndex;
+        rows = Mathf.Min(startRows + (sizeIncrease * rowIncreaseStep), maxRows);
+        columns = Mathf.Min(startColumns + (sizeIncrease * columnIncreaseStep), maxColumns);
+        EnsureEvenGrid();
+        previewTime = Mathf.Max(minPreviewTime, startPreviewTime - (levelIndex * previewDecreasePerLevel));
+        mismatchDelay = Mathf.Max(minMismatchDelay, startMismatchDelay - (levelIndex * mismatchDecreasePerLevel));
+    }
+
+    private void EnsureEvenGrid()
+    {
+        int totalCards = rows * columns;
+        if (totalCards % 2 == 0)
+        {
+            return;
+        }
+
+        if (columns < maxColumns)
+        {
+            columns++;
+        }
+        else if (rows < maxRows)
+        {
+            rows++;
+        }
+        else if (columns > 1)
+        {
+            columns--;
+        }
+        else if (rows > 1)
+        {
+            rows--;
         }
     }
 
