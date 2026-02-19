@@ -825,7 +825,7 @@ GameObject:
   - component: {fileID: 1150698481}
   - component: {fileID: 1150698480}
   m_Layer: 0
-  m_Name: Gane Controller
+  m_Name: Game Controller
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -856,6 +856,18 @@ MonoBehaviour:
   columns: 2
   previewTime: 2
   mismatchDelay: 0.6
+  levelCompleteDelay: 1.5
+  maxRows: 4
+  maxColumns: 4
+  sizeIncreaseEveryLevels: 1
+  rowIncreaseStep: 1
+  columnIncreaseStep: 1
+  previewIncreasePerPair: 0.05
+  maxPreviewTime: 4
+  mismatchDecreasePerLevel: 0.05
+  minMismatchDelay: 0.2
+  randomizePositions: 1
+  randomPadding: {x: 20, y: 20}
 --- !u!4 &1150698481
 Transform:
   m_ObjectHideFlags: 0
