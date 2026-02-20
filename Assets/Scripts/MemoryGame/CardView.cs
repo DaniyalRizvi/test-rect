@@ -14,13 +14,17 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
     [SerializeField] private float flipDuration = 0.3f;
     [SerializeField] private float liftHeight = 18f;
     [SerializeField] private float flipScale = 1.08f;
+    [SerializeField] private float matchLiftHeight = 14f;
+    [SerializeField] private float matchLiftDuration = 0.2f;
 
     private Button button;
     private RectTransform rectTransform;
     private Coroutine pressRoutine;
     private Coroutine flipRoutine;
+    private Coroutine matchLiftRoutine;
     private bool isPressed;
     private bool pointerInside;
+    private bool isFlipping;
     private Vector3 baseScale;
     private Vector2 basePosition;
     private Quaternion baseRotation;
@@ -28,6 +32,7 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
     public int CardId { get; private set; }
     public bool IsRevealed { get; private set; }
     public bool IsMatched { get; private set; }
+    public bool IsFlipping => isFlipping;
 
     public event Action<CardView> Clicked;
 
@@ -98,6 +103,24 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
         StopAnimations();
         UpdateVisuals();
         SetInteractable(false);
+    }
+
+    public void PlayMatchLift()
+    {
+        if (matchLiftRoutine != null)
+        {
+            StopCoroutine(matchLiftRoutine);
+        }
+
+        matchLiftRoutine = StartCoroutine(MatchLiftRoutine());
+    }
+
+    public System.Collections.IEnumerator WaitForFlipComplete()
+    {
+        while (isFlipping)
+        {
+            yield return null;
+        }
     }
 
     public void ResetState()
@@ -239,6 +262,7 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
             StopCoroutine(flipRoutine);
         }
 
+        isFlipping = true;
         StopPressRoutine();
         flipRoutine = StartCoroutine(FlipRoutine(reveal));
     }
@@ -284,22 +308,15 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
         {
             rectTransform.anchoredPosition = basePosition;
             rectTransform.localScale = Vector3.one;
-            if (!reveal)
-            {
-                baseRotation = Quaternion.identity;
-            }
-            rectTransform.localRotation = baseRotation * Quaternion.Euler(0f, reveal ? 180f : 0f, 0f);
+            rectTransform.localRotation = Quaternion.identity;
         }
         else
         {
             transform.localScale = Vector3.one;
-            if (!reveal)
-            {
-                baseRotation = Quaternion.identity;
-            }
-            transform.localRotation = baseRotation * Quaternion.Euler(0f, reveal ? 180f : 0f, 0f);
+            transform.localRotation = Quaternion.identity;
         }
 
+        isFlipping = false;
         flipRoutine = null;
     }
 
@@ -312,17 +329,18 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
             flipRoutine = null;
         }
 
+        isFlipping = false;
         CacheBaseTransform();
         if (rectTransform != null)
         {
             rectTransform.localScale = Vector3.one;
             rectTransform.anchoredPosition = basePosition;
-            rectTransform.localRotation = baseRotation;
+            rectTransform.localRotation = Quaternion.identity;
         }
         else
         {
             transform.localScale = Vector3.one;
-            transform.localRotation = baseRotation;
+            transform.localRotation = Quaternion.identity;
         }
     }
 
@@ -333,6 +351,59 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
             StopCoroutine(pressRoutine);
             pressRoutine = null;
         }
+    }
+
+    private System.Collections.IEnumerator MatchLiftRoutine()
+    {
+        CacheBaseTransform();
+        float elapsed = 0f;
+        Vector2 startPosition = basePosition;
+        Vector2 targetPosition = basePosition + Vector2.up * matchLiftHeight;
+        float halfDuration = Mathf.Max(0.01f, matchLiftDuration * 0.5f);
+
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / halfDuration);
+            Vector2 position = Vector2.Lerp(startPosition, targetPosition, t);
+            if (rectTransform != null)
+            {
+                rectTransform.anchoredPosition = position;
+            }
+            else
+            {
+                transform.localPosition = position;
+            }
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / halfDuration);
+            Vector2 position = Vector2.Lerp(targetPosition, startPosition, t);
+            if (rectTransform != null)
+            {
+                rectTransform.anchoredPosition = position;
+            }
+            else
+            {
+                transform.localPosition = position;
+            }
+            yield return null;
+        }
+
+        if (rectTransform != null)
+        {
+            rectTransform.anchoredPosition = startPosition;
+        }
+        else
+        {
+            transform.localPosition = startPosition;
+        }
+
+        matchLiftRoutine = null;
     }
 
     private System.Collections.IEnumerator CacheBaseTransformNextFrame()

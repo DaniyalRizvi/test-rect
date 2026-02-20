@@ -296,10 +296,21 @@ public class MemoryGameController : MonoBehaviour
     {
         isBusy = true;
 
+        if (firstSelection != null)
+        {
+            yield return firstSelection.WaitForFlipComplete();
+        }
+        if (secondSelection != null)
+        {
+            yield return secondSelection.WaitForFlipComplete();
+        }
+
         if (firstSelection.CardId == secondSelection.CardId)
         {
             firstSelection.Match();
             secondSelection.Match();
+            firstSelection.PlayMatchLift();
+            secondSelection.PlayMatchLift();
             matchedCount += 2;
             comboStreak++;
             int comboBonus = comboStreak > 1 ? comboBonusPerMatch * (comboStreak - 1) : 0;
