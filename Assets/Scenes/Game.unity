@@ -461,7 +461,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b19d48f228d3874f8cb5631dc0e3651, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EyeSlide.UIFX.JellyDialogPop
-  target: {fileID: 0}
+  target: {fileID: 509300757}
   startScale: 0.75
   overshootScale: 1.08
   inDuration: 0.18
@@ -726,6 +726,7 @@ GameObject:
   - component: {fileID: 610876048}
   - component: {fileID: 610876047}
   - component: {fileID: 610876046}
+  - component: {fileID: 610876049}
   m_Layer: 5
   m_Name: ClearData-Button
   m_TagString: Untagged
@@ -847,6 +848,30 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 610876044}
   m_CullTransparentMesh: 1
+--- !u!114 &610876049
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 610876044}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b545283e70bc7f244a256a90e0ab4da2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EyeSlide.UIFX.JellyButtonFX
+  target: {fileID: 610876045}
+  pressedScale: 0.92
+  releaseOvershoot: 1.06
+  downDuration: 0.12
+  upOvershootDuration: 0.12
+  settleDuration: 0.18
+  useUnscaledTime: 1
+  resetOnDisable: 1
+  scaleFromCenter: 1
+  easing: 0
+  centerCompPositionMode: 0
+  autoLocalInScrollRect: 1
 --- !u!1 &701454692
 GameObject:
   m_ObjectHideFlags: 0
@@ -1140,6 +1165,7 @@ GameObject:
   - component: {fileID: 906321981}
   - component: {fileID: 906321980}
   - component: {fileID: 906321979}
+  - component: {fileID: 906321982}
   m_Layer: 5
   m_Name: RestartLevel-Button
   m_TagString: Untagged
@@ -1261,6 +1287,30 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 906321977}
   m_CullTransparentMesh: 1
+--- !u!114 &906321982
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 906321977}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b545283e70bc7f244a256a90e0ab4da2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EyeSlide.UIFX.JellyButtonFX
+  target: {fileID: 906321978}
+  pressedScale: 0.92
+  releaseOvershoot: 1.06
+  downDuration: 0.12
+  upOvershootDuration: 0.12
+  settleDuration: 0.18
+  useUnscaledTime: 1
+  resetOnDisable: 1
+  scaleFromCenter: 1
+  easing: 0
+  centerCompPositionMode: 0
+  autoLocalInScrollRect: 1
 --- !u!1 &1104707222
 GameObject:
   m_ObjectHideFlags: 0
@@ -1661,7 +1711,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b19d48f228d3874f8cb5631dc0e3651, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EyeSlide.UIFX.JellyDialogPop
-  target: {fileID: 0}
+  target: {fileID: 1306692518}
   startScale: 0.75
   overshootScale: 1.08
   inDuration: 0.18
