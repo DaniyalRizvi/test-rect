@@ -1,10 +1,38 @@
-using System.Collections.Generic;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 public class MemoryGameController : MonoBehaviour
 {
+    private const string SaveLevelKey = "MemoryGame.Level";
+    private const string SaveScoreKey = "MemoryGame.Score";
+    private const string SaveDataKey = "MemoryGame.SaveData";
+
+    [System.Serializable]
+    private class CardSaveState
+    {
+        public int cardId;
+        public int faceIndex;
+        public bool matched;
+        public bool revealed;
+        public Vector2 position;
+    }
+
+    [System.Serializable]
+    private class SaveData
+    {
+        public int levelIndex;
+        public int score;
+        public int movesUsed;
+        public int movesLimit;
+        public int rows;
+        public int columns;
+        public float previewTime;
+        public float mismatchDelay;
+        public List<CardSaveState> cards;
+    }
+
     [Header("Grid")]
     [SerializeField] private GridLayoutGroup gridLayout;
     [SerializeField] private CardView cardPrefab;
@@ -17,6 +45,7 @@ public class MemoryGameController : MonoBehaviour
     [SerializeField] private Text movesText;
     [SerializeField] private Text scoreText;
     [SerializeField] private Text comboText;
+    [SerializeField] private Text levelText;
 
     [Header("Scoring")]
     [SerializeField] private int scorePerMatch = 5;
@@ -54,6 +83,7 @@ public class MemoryGameController : MonoBehaviour
     [SerializeField] private Vector2 randomSpacing = new Vector2(10f, 10f);
 
     private readonly List<CardView> cards = new List<CardView>();
+    private readonly List<int> cardFaceIndices = new List<int>();
     private CardView firstSelection;
     private CardView secondSelection;
     private bool isBusy;
@@ -68,6 +98,7 @@ public class MemoryGameController : MonoBehaviour
     private int score;
     private int comboStreak;
     private Coroutine comboRoutine;
+    private SaveData loadedData;
 
     private void Start()
     {
@@ -76,20 +107,75 @@ public class MemoryGameController : MonoBehaviour
         startColumns = columns;
         startPreviewTime = previewTime;
         startMismatchDelay = mismatchDelay;
+        LoadProgress();
         UpdateScoreText();
         UpdateMovesText();
+        UpdateLevelText();
         if (comboText != null)
         {
             comboText.gameObject.SetActive(false);
         }
-        StartCoroutine(StartLevel());
+        StartCoroutine(StartLevel(loadedData != null && loadedData.cards != null && loadedData.cards.Count > 0));
     }
 
-    private IEnumerator StartLevel()
+    private void OnApplicationPause(bool pauseStatus)
+    {
+        if (pauseStatus)
+        {
+            SaveProgress();
+        }
+    }
+
+    private void OnApplicationQuit()
+    {
+        SaveProgress();
+    }
+
+    public void ClearSaveData()
+    {
+        PlayerPrefs.DeleteKey(SaveLevelKey);
+        PlayerPrefs.DeleteKey(SaveScoreKey);
+        PlayerPrefs.DeleteKey(SaveDataKey);
+        levelIndex = 0;
+        score = 0;
+        rows = startRows;
+        columns = startColumns;
+        previewTime = startPreviewTime;
+        mismatchDelay = startMismatchDelay;
+        movesUsed = 0;
+        movesLimit = 0;
+        loadedData = null;
+        UpdateScoreText();
+        UpdateMovesText();
+        UpdateLevelText();
+        StartCoroutine(StartLevel(false));
+    }
+
+    public void RestartCurrentLevel()
+    {
+        if (isBusy)
+        {
+            return;
+        }
+
+        StartCoroutine(RestartLevel());
+    }
+
+    private System.Collections.IEnumerator StartLevel(bool useSavedState)
     {
         ClearGrid();
+        if (useSavedState && loadedData != null && loadedData.cards != null && loadedData.cards.Count > 0)
+        {
+            GenerateCardsFromSave(loadedData);
+            ApplySavedCardStates(loadedData);
+            ApplySavedLevelState(loadedData);
+            loadedData = null;
+            SaveProgress();
+            yield break;
+        }
+
         GenerateCards();
-        ResetLevelState();
+        ResetLevelState(false);
 
         foreach (var card in cards)
         {
@@ -102,6 +188,8 @@ public class MemoryGameController : MonoBehaviour
         {
             card.Hide();
         }
+
+        SaveProgress();
     }
 
     private void GenerateCards()
@@ -119,13 +207,14 @@ public class MemoryGameController : MonoBehaviour
             return;
         }
 
+        cardFaceIndices.Clear();
         int pairsNeeded = totalCards / 2;
-        var deck = new List<(int id, Sprite sprite)>(totalCards);
+        var deck = new List<(int id, int faceIndex, Sprite sprite)>(totalCards);
         for (int i = 0; i < pairsNeeded; i++)
         {
             int faceIndex = i % cardFaces.Count;
-            deck.Add((i, cardFaces[faceIndex]));
-            deck.Add((i, cardFaces[faceIndex]));
+            deck.Add((i, faceIndex, cardFaces[faceIndex]));
+            deck.Add((i, faceIndex, cardFaces[faceIndex]));
         }
 
         Shuffle(deck);
@@ -141,6 +230,7 @@ public class MemoryGameController : MonoBehaviour
             card.Initialize(deck[i].id, deck[i].sprite, cardBackSprite);
             card.Clicked += HandleCardClicked;
             cards.Add(card);
+            cardFaceIndices.Add(deck[i].faceIndex);
         }
 
         if (randomizePositions)
@@ -175,7 +265,7 @@ public class MemoryGameController : MonoBehaviour
         }
     }
 
-    private IEnumerator ResolveSelection()
+    private System.Collections.IEnumerator ResolveSelection()
     {
         isBusy = true;
 
@@ -200,6 +290,7 @@ public class MemoryGameController : MonoBehaviour
 
         firstSelection = null;
         secondSelection = null;
+        SaveProgress();
 
         if (matchedCount >= cards.Count)
         {
@@ -216,22 +307,45 @@ public class MemoryGameController : MonoBehaviour
         isBusy = false;
     }
 
-    private IEnumerator AdvanceLevel()
+    private System.Collections.IEnumerator AdvanceLevel()
     {
         isBusy = true;
         yield return new WaitForSeconds(levelCompleteDelay);
         levelIndex++;
         ApplyDifficulty();
+        UpdateLevelText();
         isBusy = false;
-        StartCoroutine(StartLevel());
+        StartCoroutine(StartLevel(false));
     }
 
-    private IEnumerator RestartLevel()
+    private System.Collections.IEnumerator RestartLevel()
     {
         isBusy = true;
         yield return new WaitForSeconds(levelFailedDelay);
+        ResetCurrentLevelState();
         isBusy = false;
-        StartCoroutine(StartLevel());
+    }
+
+    private void ResetCurrentLevelState()
+    {
+        matchedCount = 0;
+        movesUsed = 0;
+        comboStreak = 0;
+        movesLimit = CalculateMovesLimit();
+        score = 0;
+        UpdateMovesText();
+        UpdateScoreText();
+        if (comboText != null)
+        {
+            comboText.gameObject.SetActive(false);
+        }
+
+        foreach (var card in cards)
+        {
+            card.ResetState();
+        }
+
+        SaveProgress();
     }
 
     private void ApplyDifficulty()
@@ -245,7 +359,7 @@ public class MemoryGameController : MonoBehaviour
         mismatchDelay = Mathf.Max(minMismatchDelay, startMismatchDelay - (levelIndex * mismatchDecreasePerLevel));
     }
 
-    private void ResetLevelState()
+    private void ResetLevelState(bool keepCardStates = false)
     {
         matchedCount = 0;
         movesUsed = 0;
@@ -255,6 +369,14 @@ public class MemoryGameController : MonoBehaviour
         if (comboText != null)
         {
             comboText.gameObject.SetActive(false);
+        }
+
+        if (keepCardStates)
+        {
+            foreach (var card in cards)
+            {
+                card.Hide();
+            }
         }
     }
 
@@ -287,6 +409,14 @@ public class MemoryGameController : MonoBehaviour
         }
     }
 
+    private void UpdateLevelText()
+    {
+        if (levelText != null)
+        {
+            levelText.text = $"Level: {levelIndex + 1}";
+        }
+    }
+
     private void ShowCombo(bool active)
     {
         if (comboText == null)
@@ -308,7 +438,7 @@ public class MemoryGameController : MonoBehaviour
         comboRoutine = StartCoroutine(HideComboAfterDelay());
     }
 
-    private IEnumerator HideComboAfterDelay()
+    private System.Collections.IEnumerator HideComboAfterDelay()
     {
         yield return new WaitForSeconds(comboDisplayTime);
         if (comboText != null)
@@ -438,6 +568,174 @@ public class MemoryGameController : MonoBehaviour
         {
             int j = Random.Range(0, i + 1);
             (list[i], list[j]) = (list[j], list[i]);
+        }
+    }
+
+    private void SaveProgress()
+    {
+        var data = new SaveData
+        {
+            levelIndex = levelIndex,
+            score = score,
+            movesUsed = movesUsed,
+            movesLimit = movesLimit,
+            rows = rows,
+            columns = columns,
+            previewTime = previewTime,
+            mismatchDelay = mismatchDelay,
+            cards = new List<CardSaveState>(cards.Count)
+        };
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            var card = cards[i];
+            var rect = card.transform as RectTransform;
+            int faceIndex = i < cardFaceIndices.Count ? cardFaceIndices[i] : 0;
+            data.cards.Add(new CardSaveState
+            {
+                cardId = card.CardId,
+                faceIndex = faceIndex,
+                matched = card.IsMatched,
+                revealed = card.IsRevealed,
+                position = rect != null ? rect.anchoredPosition : Vector2.zero
+            });
+        }
+
+        PlayerPrefs.SetString(SaveDataKey, JsonUtility.ToJson(data));
+        PlayerPrefs.SetInt(SaveLevelKey, levelIndex);
+        PlayerPrefs.SetInt(SaveScoreKey, score);
+        PlayerPrefs.Save();
+    }
+
+    private void LoadProgress()
+    {
+        loadedData = null;
+        if (PlayerPrefs.HasKey(SaveDataKey))
+        {
+            var json = PlayerPrefs.GetString(SaveDataKey);
+            if (!string.IsNullOrEmpty(json))
+            {
+                var data = JsonUtility.FromJson<SaveData>(json);
+                if (data != null && data.cards != null && data.cards.Count > 0)
+                {
+                    levelIndex = Mathf.Max(0, data.levelIndex);
+                    score = Mathf.Max(0, data.score);
+                    movesUsed = Mathf.Max(0, data.movesUsed);
+                    movesLimit = Mathf.Max(1, data.movesLimit);
+                    rows = Mathf.Max(1, data.rows);
+                    columns = Mathf.Max(1, data.columns);
+                    previewTime = data.previewTime > 0f ? data.previewTime : startPreviewTime;
+                    mismatchDelay = data.mismatchDelay > 0f ? data.mismatchDelay : startMismatchDelay;
+                    loadedData = data;
+                    return;
+                }
+            }
+        }
+
+        if (PlayerPrefs.HasKey(SaveLevelKey))
+        {
+            levelIndex = Mathf.Max(0, PlayerPrefs.GetInt(SaveLevelKey));
+            score = Mathf.Max(0, PlayerPrefs.GetInt(SaveScoreKey));
+            ApplyDifficulty();
+        }
+        else
+        {
+            levelIndex = 0;
+            score = 0;
+            rows = startRows;
+            columns = startColumns;
+            previewTime = startPreviewTime;
+            mismatchDelay = startMismatchDelay;
+        }
+    }
+
+    private void GenerateCardsFromSave(SaveData data)
+    {
+        if (data == null || data.cards == null || data.cards.Count == 0)
+        {
+            return;
+        }
+
+        cardFaceIndices.Clear();
+        if (gridLayout != null)
+        {
+            gridLayout.enabled = !randomizePositions;
+        }
+
+        foreach (var savedCard in data.cards)
+        {
+            int faceIndex = cardFaces.Count > 0 ? Mathf.Clamp(savedCard.faceIndex, 0, cardFaces.Count - 1) : 0;
+            var faceSprite = cardFaces.Count > 0 ? cardFaces[faceIndex] : null;
+            var card = Instantiate(cardPrefab, gridLayout.transform);
+            card.Initialize(savedCard.cardId, faceSprite, cardBackSprite);
+            card.Clicked += HandleCardClicked;
+            cards.Add(card);
+            cardFaceIndices.Add(faceIndex);
+
+            if (randomizePositions)
+            {
+                var rect = card.transform as RectTransform;
+                if (rect != null)
+                {
+                    rect.anchorMin = new Vector2(0.5f, 0.5f);
+                    rect.anchorMax = new Vector2(0.5f, 0.5f);
+                    rect.pivot = new Vector2(0.5f, 0.5f);
+                    rect.anchoredPosition = savedCard.position;
+                }
+            }
+        }
+    }
+
+    private void ApplySavedCardStates(SaveData data)
+    {
+        if (data == null || data.cards == null)
+        {
+            return;
+        }
+
+        matchedCount = 0;
+        int count = Mathf.Min(cards.Count, data.cards.Count);
+        for (int i = 0; i < count; i++)
+        {
+            var card = cards[i];
+            var savedCard = data.cards[i];
+
+            if (savedCard.matched)
+            {
+                card.Match();
+                matchedCount++;
+                continue;
+            }
+
+            if (savedCard.revealed)
+            {
+                card.Reveal();
+            }
+            else
+            {
+                card.Hide();
+            }
+        }
+    }
+
+    private void ApplySavedLevelState(SaveData data)
+    {
+        if (data == null)
+        {
+            return;
+        }
+
+        levelIndex = Mathf.Max(0, data.levelIndex);
+        score = Mathf.Max(0, data.score);
+        movesUsed = Mathf.Max(0, data.movesUsed);
+        movesLimit = data.movesLimit > 0 ? data.movesLimit : CalculateMovesLimit();
+        comboStreak = 0;
+        UpdateScoreText();
+        UpdateMovesText();
+        UpdateLevelText();
+        if (comboText != null)
+        {
+            comboText.gameObject.SetActive(false);
         }
     }
 }
