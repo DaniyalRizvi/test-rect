@@ -1485,11 +1485,16 @@ MonoBehaviour:
   cardPrefab: {fileID: 2886732571785416412, guid: 42edf5e2e2a9cbe4fa55088b9a032ed1, type: 3}
   cardBackSprite: {fileID: 21300000, guid: 33c14f287a557524bb85f8116aa945c7, type: 3}
   cardFaces:
-  - {fileID: 21300000, guid: 47f7fa91ec3398d4e9f957197e82aa7c, type: 3}
-  - {fileID: 21300000, guid: 199d41aaf45c2ec4ca3802d7a742ebc8, type: 3}
-  - {fileID: 21300000, guid: b14ac881a84e9f84c9bfd02de2f87a39, type: 3}
-  - {fileID: 21300000, guid: b8fb1eb76f8e5554e8706aee29d8f06a, type: 3}
-  - {fileID: 21300000, guid: 27027828dc49ff5488881897ca16e0bf, type: 3}
+  - {fileID: 21300000, guid: 5629facc794de744d8339da68aee6410, type: 3}
+  - {fileID: 21300000, guid: eccc281a9dd71da49a10bb27910f60ce, type: 3}
+  - {fileID: 21300000, guid: 67d03cb4012dae449aaf73d2a0e1a9c6, type: 3}
+  - {fileID: 21300000, guid: 63c7ab4e0c15cb648a580db2392ec933, type: 3}
+  - {fileID: 21300000, guid: 5d211a66ef004ff43a1a5b0059858d6a, type: 3}
+  - {fileID: 21300000, guid: ec7fa2094d053b54d9092f2823f76f5d, type: 3}
+  - {fileID: 21300000, guid: 8674b0db3fa614d46b87d8ad3bcf9b22, type: 3}
+  - {fileID: 21300000, guid: 485615f87769cf54793c0fbf3976512b, type: 3}
+  - {fileID: 21300000, guid: 43d7456e8a1a5d544ba021600471b589, type: 3}
+  - {fileID: 21300000, guid: 96e16361dc370124db0fdb0a01e7e644, type: 3}
   movesText: {fileID: 182969811}
   scoreText: {fileID: 1394734953}
   comboText: {fileID: 167282796}

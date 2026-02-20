@@ -100,7 +100,7 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
     {
         IsMatched = true;
         IsRevealed = true;
-        StopAnimations();
+        StopMatchAnimations();
         UpdateVisuals();
         SetInteractable(false);
     }
@@ -271,7 +271,6 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
     {
         CacheBaseTransform();
         float elapsed = 0f;
-        float half = flipDuration * 0.5f;
         bool visualsSwapped = false;
 
         while (elapsed < flipDuration)
@@ -282,39 +281,20 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
             float scaleT = t < 0.5f ? t * 2f : (1f - t) * 2f;
             float rotationT = Mathf.SmoothStep(0f, 1f, t);
             float yRotation = Mathf.Lerp(0f, 180f, rotationT);
+            float angle = reveal ? yRotation : 180f + yRotation;
 
-            if (!visualsSwapped && elapsed >= half)
+            if (!visualsSwapped && angle >= 90f)
             {
                 UpdateVisuals();
                 visualsSwapped = true;
             }
 
-            if (rectTransform != null)
-            {
-                rectTransform.anchoredPosition = basePosition + Vector2.up * (liftHeight * liftT);
-                rectTransform.localScale = baseScale * Mathf.Lerp(1f, flipScale, scaleT);
-                rectTransform.localRotation = baseRotation * Quaternion.Euler(0f, reveal ? yRotation : 180f - yRotation, 0f);
-            }
-            else
-            {
-                transform.localScale = baseScale * Mathf.Lerp(1f, flipScale, scaleT);
-                transform.localRotation = baseRotation * Quaternion.Euler(0f, reveal ? yRotation : 180f - yRotation, 0f);
-            }
-
+            ApplyTransform(basePosition + Vector2.up * (liftHeight * liftT), baseScale * Mathf.Lerp(1f, flipScale, scaleT), angle);
             yield return null;
         }
 
-        if (rectTransform != null)
-        {
-            rectTransform.anchoredPosition = basePosition;
-            rectTransform.localScale = Vector3.one;
-            rectTransform.localRotation = Quaternion.identity;
-        }
-        else
-        {
-            transform.localScale = Vector3.one;
-            transform.localRotation = Quaternion.identity;
-        }
+        float finalAngle = reveal ? 180f : 360f;
+        ApplyTransform(basePosition, Vector3.one, finalAngle);
 
         isFlipping = false;
         flipRoutine = null;
@@ -331,17 +311,26 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
 
         isFlipping = false;
         CacheBaseTransform();
-        if (rectTransform != null)
+        float finalAngle = IsRevealed ? 180f : 360f;
+        ApplyTransform(basePosition, Vector3.one, finalAngle);
+    }
+
+    private void StopMatchAnimations()
+    {
+        StopPressRoutine();
+        if (flipRoutine != null)
         {
-            rectTransform.localScale = Vector3.one;
-            rectTransform.anchoredPosition = basePosition;
-            rectTransform.localRotation = Quaternion.identity;
+            StopCoroutine(flipRoutine);
+            flipRoutine = null;
         }
-        else
+
+        if (matchLiftRoutine != null)
         {
-            transform.localScale = Vector3.one;
-            transform.localRotation = Quaternion.identity;
+            StopCoroutine(matchLiftRoutine);
+            matchLiftRoutine = null;
         }
+
+        isFlipping = false;
     }
 
     private void StopPressRoutine()
@@ -423,17 +412,32 @@ public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, I
         {
             baseScale = rectTransform.localScale;
             basePosition = rectTransform.anchoredPosition;
-            baseRotation = rectTransform.localRotation;
         }
         else
         {
             baseScale = transform.localScale;
-            baseRotation = transform.localRotation;
         }
 
+        baseRotation = Quaternion.identity;
         if (baseScale == Vector3.zero)
         {
             baseScale = Vector3.one;
+        }
+    }
+
+    private void ApplyTransform(Vector2 position, Vector3 scale, float angle)
+    {
+        if (rectTransform != null)
+        {
+            rectTransform.anchoredPosition = position;
+            rectTransform.localScale = scale;
+            rectTransform.localRotation = Quaternion.Euler(0f, angle, 0f);
+        }
+        else
+        {
+            transform.localPosition = position;
+            transform.localScale = scale;
+            transform.localRotation = Quaternion.Euler(0f, angle, 0f);
         }
     }
 }
