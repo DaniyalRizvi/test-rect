@@ -46,11 +46,22 @@ public class MemoryGameController : MonoBehaviour
     [SerializeField] private Text scoreText;
     [SerializeField] private Text comboText;
     [SerializeField] private Text levelText;
+    [SerializeField] private GameObject levelCompletedDialog;
+    [SerializeField] private GameObject levelFailedDialog;
 
     [Header("Scoring")]
     [SerializeField] private int scorePerMatch = 5;
     [SerializeField] private int comboBonusPerMatch = 2;
-    [SerializeField] private float comboDisplayTime = 0.75f;
+    [SerializeField] private float comboDisplayTime = 1.5f;
+
+    [Header("Animations")]
+    [SerializeField] private float movesPulseScale = 1.1f;
+    [SerializeField] private float movesPulseSpeed = 4f;
+    [SerializeField] private Color lowMovesColor = Color.red;
+    [SerializeField] private float comboMinScale = 0.8f;
+    [SerializeField] private float comboMaxScale = 1.2f;
+    [SerializeField] private float scorePopScale = 1.15f;
+    [SerializeField] private float scorePopDuration = 0.2f;
 
     [Header("Level Settings")]
     [SerializeField] private int rows = 2;
@@ -98,6 +109,12 @@ public class MemoryGameController : MonoBehaviour
     private int score;
     private int comboStreak;
     private Coroutine comboRoutine;
+    private Coroutine movesPulseRoutine;
+    private Coroutine scorePopRoutine;
+    private Vector3 movesTextBaseScale;
+    private Vector3 scoreTextBaseScale;
+    private Vector3 comboTextBaseScale;
+    private Color movesTextBaseColor;
     private SaveData loadedData;
 
     private void Start()
@@ -107,6 +124,27 @@ public class MemoryGameController : MonoBehaviour
         startColumns = columns;
         startPreviewTime = previewTime;
         startMismatchDelay = mismatchDelay;
+        if (movesText != null)
+        {
+            movesTextBaseColor = movesText.color;
+            movesTextBaseScale = movesText.transform.localScale;
+        }
+        if (scoreText != null)
+        {
+            scoreTextBaseScale = scoreText.transform.localScale;
+        }
+        if (comboText != null)
+        {
+            comboTextBaseScale = comboText.transform.localScale;
+        }
+        if (levelCompletedDialog != null)
+        {
+            levelCompletedDialog.SetActive(false);
+        }
+        if (levelFailedDialog != null)
+        {
+            levelFailedDialog.SetActive(false);
+        }
         LoadProgress();
         UpdateScoreText();
         UpdateMovesText();
@@ -267,6 +305,7 @@ public class MemoryGameController : MonoBehaviour
             int comboBonus = comboStreak > 1 ? comboBonusPerMatch * (comboStreak - 1) : 0;
             score += scorePerMatch + comboBonus;
             UpdateScoreText();
+            PopScoreText();
             ShowCombo(comboStreak > 1);
             if (AudioManager.Instance != null)
             {
@@ -311,7 +350,15 @@ public class MemoryGameController : MonoBehaviour
     private System.Collections.IEnumerator AdvanceLevel()
     {
         isBusy = true;
-        yield return new WaitForSeconds(levelCompleteDelay);
+        if (levelCompletedDialog != null)
+        {
+            levelCompletedDialog.SetActive(true);
+        }
+        yield return new WaitForSeconds(levelCompleteDelay + 1.5f);
+        if (levelCompletedDialog != null)
+        {
+            levelCompletedDialog.SetActive(false);
+        }
         levelIndex++;
         ApplyDifficulty();
         UpdateLevelText();
@@ -322,7 +369,15 @@ public class MemoryGameController : MonoBehaviour
     private System.Collections.IEnumerator RestartLevel()
     {
         isBusy = true;
+        if (levelFailedDialog != null)
+        {
+            levelFailedDialog.SetActive(true);
+        }
         yield return new WaitForSeconds(levelFailedDelay);
+        if (levelFailedDialog != null)
+        {
+            levelFailedDialog.SetActive(false);
+        }
         ResetCurrentLevelState(false);
         yield return PreviewAllCards();
         SaveProgress();
@@ -420,6 +475,27 @@ public class MemoryGameController : MonoBehaviour
         {
             movesText.text = $"Moves:\n{movesUsed}/{movesLimit}";
         }
+
+        int movesLeft = Mathf.Max(0, movesLimit - movesUsed);
+        bool lowMoves = movesLeft <= 5;
+        if (movesText != null)
+        {
+            movesText.color = lowMoves ? lowMovesColor : movesTextBaseColor;
+        }
+
+        if (lowMoves && movesPulseRoutine == null)
+        {
+            movesPulseRoutine = StartCoroutine(PulseMovesText());
+        }
+        else if (!lowMoves && movesPulseRoutine != null)
+        {
+            StopCoroutine(movesPulseRoutine);
+            movesPulseRoutine = null;
+            if (movesText != null)
+            {
+                movesText.transform.localScale = movesTextBaseScale;
+            }
+        }
     }
 
     private void UpdateScoreText()
@@ -456,7 +532,7 @@ public class MemoryGameController : MonoBehaviour
         {
             StopCoroutine(comboRoutine);
         }
-        comboRoutine = StartCoroutine(HideComboAfterDelay());
+        comboRoutine = StartCoroutine(AnimateCombo());
     }
 
     private System.Collections.IEnumerator HideComboAfterDelay()
@@ -465,7 +541,102 @@ public class MemoryGameController : MonoBehaviour
         if (comboText != null)
         {
             comboText.gameObject.SetActive(false);
+            comboText.transform.localScale = comboTextBaseScale;
         }
+    }
+
+    private System.Collections.IEnumerator AnimateCombo()
+    {
+        if (comboText == null)
+        {
+            yield break;
+        }
+
+        comboText.transform.localScale = comboTextBaseScale * comboMinScale;
+        float halfDuration = comboDisplayTime * 0.5f;
+        float elapsed = 0f;
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / halfDuration);
+            float scale = Mathf.Lerp(comboMinScale, comboMaxScale, t);
+            comboText.transform.localScale = comboTextBaseScale * scale;
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / halfDuration);
+            float scale = Mathf.Lerp(comboMaxScale, 1f, t);
+            comboText.transform.localScale = comboTextBaseScale * scale;
+            yield return null;
+        }
+
+        yield return HideComboAfterDelay();
+    }
+
+    private System.Collections.IEnumerator PulseMovesText()
+    {
+        if (movesText == null)
+        {
+            yield break;
+        }
+
+        while (true)
+        {
+            float pulse = (Mathf.Sin(Time.unscaledTime * movesPulseSpeed) + 1f) * 0.5f;
+            float scale = Mathf.Lerp(1f, movesPulseScale, pulse);
+            movesText.transform.localScale = movesTextBaseScale * scale;
+            yield return null;
+        }
+    }
+
+    private void PopScoreText()
+    {
+        if (scoreText == null)
+        {
+            return;
+        }
+
+        if (scorePopRoutine != null)
+        {
+            StopCoroutine(scorePopRoutine);
+        }
+
+        scorePopRoutine = StartCoroutine(PopScoreRoutine());
+    }
+
+    private System.Collections.IEnumerator PopScoreRoutine()
+    {
+        if (scoreText == null)
+        {
+            yield break;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < scorePopDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / scorePopDuration);
+            float scale = Mathf.Lerp(1f, scorePopScale, t);
+            scoreText.transform.localScale = scoreTextBaseScale * scale;
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < scorePopDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / scorePopDuration);
+            float scale = Mathf.Lerp(scorePopScale, 1f, t);
+            scoreText.transform.localScale = scoreTextBaseScale * scale;
+            yield return null;
+        }
+
+        scoreText.transform.localScale = scoreTextBaseScale;
+        scorePopRoutine = null;
     }
 
     private void RandomizeCardPositions()
