@@ -1,0 +1,443 @@
+using System;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+public class CardView : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+{
+    [SerializeField] private Image faceImage;
+    [SerializeField] private Image backImage;
+
+    [Header("Animation")]
+    [SerializeField] private float pressScale = 0.92f;
+    [SerializeField] private float pressDuration = 0.08f;
+    [SerializeField] private float flipDuration = 0.3f;
+    [SerializeField] private float liftHeight = 18f;
+    [SerializeField] private float flipScale = 1.08f;
+    [SerializeField] private float matchLiftHeight = 14f;
+    [SerializeField] private float matchLiftDuration = 0.2f;
+
+    private Button button;
+    private RectTransform rectTransform;
+    private Coroutine pressRoutine;
+    private Coroutine flipRoutine;
+    private Coroutine matchLiftRoutine;
+    private bool isPressed;
+    private bool pointerInside;
+    private bool isFlipping;
+    private Vector3 baseScale;
+    private Vector2 basePosition;
+    private Quaternion baseRotation;
+
+    public int CardId { get; private set; }
+    public bool IsRevealed { get; private set; }
+    public bool IsMatched { get; private set; }
+    public bool IsFlipping => isFlipping;
+
+    public event Action<CardView> Clicked;
+
+    private void Awake()
+    {
+        button = GetComponent<Button>();
+        rectTransform = transform as RectTransform;
+        CacheBaseTransform();
+    }
+
+    private void OnDestroy()
+    {
+        if (button != null)
+        {
+            button.onClick.RemoveListener(HandleClick);
+        }
+    }
+
+    public void Initialize(int cardId, Sprite faceSprite, Sprite backSprite)
+    {
+        CardId = cardId;
+        if (faceImage != null)
+        {
+            faceImage.sprite = faceSprite;
+        }
+
+        if (backImage != null)
+        {
+            backImage.sprite = backSprite;
+        }
+
+        CacheBaseTransform();
+        StartCoroutine(CacheBaseTransformNextFrame());
+        ResetState();
+    }
+
+    public void RefreshBaseTransform()
+    {
+        CacheBaseTransform();
+    }
+
+    public void Reveal()
+    {
+        if (IsMatched || IsRevealed)
+        {
+            return;
+        }
+
+        IsRevealed = true;
+        StartFlip(true);
+    }
+
+    public void Hide()
+    {
+        if (IsMatched || !IsRevealed)
+        {
+            return;
+        }
+
+        IsRevealed = false;
+        StartFlip(false);
+    }
+
+    public void Match()
+    {
+        IsMatched = true;
+        IsRevealed = true;
+        StopMatchAnimations();
+        UpdateVisuals();
+        SetInteractable(false);
+    }
+
+    public void PlayMatchLift()
+    {
+        if (matchLiftRoutine != null)
+        {
+            StopCoroutine(matchLiftRoutine);
+        }
+
+        matchLiftRoutine = StartCoroutine(MatchLiftRoutine());
+    }
+
+    public System.Collections.IEnumerator WaitForFlipComplete()
+    {
+        while (isFlipping)
+        {
+            yield return null;
+        }
+    }
+
+    public void ResetState()
+    {
+        IsMatched = false;
+        IsRevealed = false;
+        StopAnimations();
+        UpdateVisuals();
+        SetInteractable(true);
+    }
+
+    public void SetInteractable(bool value)
+    {
+        if (button != null)
+        {
+            button.interactable = value;
+        }
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        if (!IsPointerInteractable())
+        {
+            return;
+        }
+
+        isPressed = true;
+        pointerInside = true;
+        StartPressScale(pressScale);
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        if (!isPressed)
+        {
+            return;
+        }
+
+        isPressed = false;
+        StartPressScale(1f);
+        if (pointerInside)
+        {
+            HandleClick();
+        }
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        pointerInside = false;
+        if (isPressed)
+        {
+            isPressed = false;
+            StartPressScale(1f);
+        }
+    }
+
+    private void HandleClick()
+    {
+        if (IsMatched || IsRevealed)
+        {
+            return;
+        }
+
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayButtonClick();
+        }
+
+        Clicked?.Invoke(this);
+    }
+
+    private void UpdateVisuals()
+    {
+        if (faceImage != null)
+        {
+            faceImage.enabled = IsRevealed || IsMatched;
+        }
+
+        if (backImage != null)
+        {
+            backImage.enabled = !IsRevealed && !IsMatched;
+        }
+    }
+
+    private bool IsPointerInteractable()
+    {
+        return !IsMatched && !IsRevealed && (button == null || button.interactable);
+    }
+
+    private void StartPressScale(float scaleMultiplier)
+    {
+        if (pressRoutine != null)
+        {
+            StopCoroutine(pressRoutine);
+        }
+
+        pressRoutine = StartCoroutine(PressScaleRoutine(scaleMultiplier));
+    }
+
+    private System.Collections.IEnumerator PressScaleRoutine(float scaleMultiplier)
+    {
+        CacheBaseTransform();
+        float elapsed = 0f;
+        Vector3 startScale = rectTransform != null ? rectTransform.localScale : transform.localScale;
+        Vector3 targetScale = baseScale * scaleMultiplier;
+
+        while (elapsed < pressDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / pressDuration);
+            Vector3 scale = Vector3.Lerp(startScale, targetScale, t);
+            if (rectTransform != null)
+            {
+                rectTransform.localScale = scale;
+            }
+            else
+            {
+                transform.localScale = scale;
+            }
+            yield return null;
+        }
+
+        if (rectTransform != null)
+        {
+            rectTransform.localScale = targetScale;
+        }
+        else
+        {
+            transform.localScale = targetScale;
+        }
+
+        pressRoutine = null;
+    }
+
+    private void StartFlip(bool reveal)
+    {
+        if (flipRoutine != null)
+        {
+            StopCoroutine(flipRoutine);
+        }
+
+        isFlipping = true;
+        StopPressRoutine();
+        flipRoutine = StartCoroutine(FlipRoutine(reveal));
+    }
+
+    private System.Collections.IEnumerator FlipRoutine(bool reveal)
+    {
+        CacheBaseTransform();
+        float elapsed = 0f;
+        bool visualsSwapped = false;
+
+        while (elapsed < flipDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / flipDuration);
+            float liftT = t < 0.5f ? t * 2f : (1f - t) * 2f;
+            float scaleT = t < 0.5f ? t * 2f : (1f - t) * 2f;
+            float rotationT = Mathf.SmoothStep(0f, 1f, t);
+            float yRotation = Mathf.Lerp(0f, 180f, rotationT);
+            float angle = reveal ? yRotation : 180f + yRotation;
+
+            if (!visualsSwapped && angle >= 90f)
+            {
+                UpdateVisuals();
+                visualsSwapped = true;
+            }
+
+            ApplyTransform(basePosition + Vector2.up * (liftHeight * liftT), baseScale * Mathf.Lerp(1f, flipScale, scaleT), angle);
+            yield return null;
+        }
+
+        float finalAngle = reveal ? 180f : 360f;
+        ApplyTransform(basePosition, Vector3.one, finalAngle);
+
+        isFlipping = false;
+        flipRoutine = null;
+    }
+
+    private void StopAnimations()
+    {
+        StopPressRoutine();
+        if (flipRoutine != null)
+        {
+            StopCoroutine(flipRoutine);
+            flipRoutine = null;
+        }
+
+        isFlipping = false;
+        CacheBaseTransform();
+        float finalAngle = IsRevealed ? 180f : 360f;
+        ApplyTransform(basePosition, Vector3.one, finalAngle);
+    }
+
+    private void StopMatchAnimations()
+    {
+        StopPressRoutine();
+        if (flipRoutine != null)
+        {
+            StopCoroutine(flipRoutine);
+            flipRoutine = null;
+        }
+
+        if (matchLiftRoutine != null)
+        {
+            StopCoroutine(matchLiftRoutine);
+            matchLiftRoutine = null;
+        }
+
+        isFlipping = false;
+    }
+
+    private void StopPressRoutine()
+    {
+        if (pressRoutine != null)
+        {
+            StopCoroutine(pressRoutine);
+            pressRoutine = null;
+        }
+    }
+
+    private System.Collections.IEnumerator MatchLiftRoutine()
+    {
+        CacheBaseTransform();
+        float elapsed = 0f;
+        Vector2 startPosition = basePosition;
+        Vector2 targetPosition = basePosition + Vector2.up * matchLiftHeight;
+        float halfDuration = Mathf.Max(0.01f, matchLiftDuration * 0.5f);
+
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / halfDuration);
+            Vector2 position = Vector2.Lerp(startPosition, targetPosition, t);
+            if (rectTransform != null)
+            {
+                rectTransform.anchoredPosition = position;
+            }
+            else
+            {
+                transform.localPosition = position;
+            }
+            yield return null;
+        }
+
+        elapsed = 0f;
+        while (elapsed < halfDuration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / halfDuration);
+            Vector2 position = Vector2.Lerp(targetPosition, startPosition, t);
+            if (rectTransform != null)
+            {
+                rectTransform.anchoredPosition = position;
+            }
+            else
+            {
+                transform.localPosition = position;
+            }
+            yield return null;
+        }
+
+        if (rectTransform != null)
+        {
+            rectTransform.anchoredPosition = startPosition;
+        }
+        else
+        {
+            transform.localPosition = startPosition;
+        }
+
+        matchLiftRoutine = null;
+    }
+
+    private System.Collections.IEnumerator CacheBaseTransformNextFrame()
+    {
+        yield return null;
+        CacheBaseTransform();
+    }
+
+    private void CacheBaseTransform()
+    {
+        if (rectTransform == null)
+        {
+            rectTransform = transform as RectTransform;
+        }
+
+        if (rectTransform != null)
+        {
+            baseScale = rectTransform.localScale;
+            basePosition = rectTransform.anchoredPosition;
+        }
+        else
+        {
+            baseScale = transform.localScale;
+        }
+
+        baseRotation = Quaternion.identity;
+        if (baseScale == Vector3.zero)
+        {
+            baseScale = Vector3.one;
+        }
+    }
+
+    private void ApplyTransform(Vector2 position, Vector3 scale, float angle)
+    {
+        if (rectTransform != null)
+        {
+            rectTransform.anchoredPosition = position;
+            rectTransform.localScale = scale;
+            rectTransform.localRotation = Quaternion.Euler(0f, angle, 0f);
+        }
+        else
+        {
+            transform.localPosition = position;
+            transform.localScale = scale;
+            transform.localRotation = Quaternion.Euler(0f, angle, 0f);
+        }
+    }
+}
