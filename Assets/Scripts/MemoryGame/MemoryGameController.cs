@@ -167,8 +167,9 @@ public class MemoryGameController : MonoBehaviour
         if (useSavedState && loadedData != null && loadedData.cards != null && loadedData.cards.Count > 0)
         {
             GenerateCardsFromSave(loadedData);
-            ApplySavedCardStates(loadedData);
             ApplySavedLevelState(loadedData);
+            yield return PreviewAllCards();
+            ApplySavedCardStates(loadedData);
             loadedData = null;
             SaveProgress();
             yield break;
@@ -176,19 +177,7 @@ public class MemoryGameController : MonoBehaviour
 
         GenerateCards();
         ResetLevelState(false);
-
-        foreach (var card in cards)
-        {
-            card.Reveal();
-        }
-
-        yield return new WaitForSeconds(previewTime);
-
-        foreach (var card in cards)
-        {
-            card.Hide();
-        }
-
+        yield return PreviewAllCards();
         SaveProgress();
     }
 
@@ -279,6 +268,10 @@ public class MemoryGameController : MonoBehaviour
             score += scorePerMatch + comboBonus;
             UpdateScoreText();
             ShowCombo(comboStreak > 1);
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.PlayMatch();
+            }
         }
         else
         {
@@ -294,12 +287,20 @@ public class MemoryGameController : MonoBehaviour
 
         if (matchedCount >= cards.Count)
         {
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.PlayGameWin();
+            }
             StartCoroutine(AdvanceLevel());
             yield break;
         }
 
         if (movesUsed >= movesLimit)
         {
+            if (AudioManager.Instance != null)
+            {
+                AudioManager.Instance.PlayGameOver();
+            }
             StartCoroutine(RestartLevel());
             yield break;
         }
@@ -322,11 +323,13 @@ public class MemoryGameController : MonoBehaviour
     {
         isBusy = true;
         yield return new WaitForSeconds(levelFailedDelay);
-        ResetCurrentLevelState();
+        ResetCurrentLevelState(false);
+        yield return PreviewAllCards();
+        SaveProgress();
         isBusy = false;
     }
 
-    private void ResetCurrentLevelState()
+    private void ResetCurrentLevelState(bool save = true)
     {
         matchedCount = 0;
         movesUsed = 0;
@@ -345,7 +348,25 @@ public class MemoryGameController : MonoBehaviour
             card.ResetState();
         }
 
-        SaveProgress();
+        if (save)
+        {
+            SaveProgress();
+        }
+    }
+
+    private System.Collections.IEnumerator PreviewAllCards()
+    {
+        foreach (var card in cards)
+        {
+            card.Reveal();
+        }
+
+        yield return new WaitForSeconds(previewTime);
+
+        foreach (var card in cards)
+        {
+            card.Hide();
+        }
     }
 
     private void ApplyDifficulty()

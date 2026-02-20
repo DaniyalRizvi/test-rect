@@ -101,6 +101,11 @@ public class CardView : MonoBehaviour
             return;
         }
 
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.PlayButtonClick();
+        }
+
         Clicked?.Invoke(this);
     }
 
