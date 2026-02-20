@@ -1,5 +1,5 @@
-using System.Collections;
 using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,6 +13,16 @@ public class MemoryGameController : MonoBehaviour
     [SerializeField] private Sprite cardBackSprite;
     [SerializeField] private List<Sprite> cardFaces = new List<Sprite>();
 
+    [Header("UI")]
+    [SerializeField] private Text movesText;
+    [SerializeField] private Text scoreText;
+    [SerializeField] private Text comboText;
+
+    [Header("Scoring")]
+    [SerializeField] private int scorePerMatch = 5;
+    [SerializeField] private int comboBonusPerMatch = 2;
+    [SerializeField] private float comboDisplayTime = 0.75f;
+
     [Header("Level Settings")]
     [SerializeField] private int rows = 2;
     [SerializeField] private int columns = 2;
@@ -21,6 +31,7 @@ public class MemoryGameController : MonoBehaviour
 
     [Header("Progression")]
     [SerializeField] private float levelCompleteDelay = 1.5f;
+    [SerializeField] private float levelFailedDelay = 1.5f;
     [SerializeField] private int maxRows = 4;
     [SerializeField] private int maxColumns = 4;
     [SerializeField] private int sizeIncreaseEveryLevels = 1;
@@ -30,6 +41,12 @@ public class MemoryGameController : MonoBehaviour
     [SerializeField] private float maxPreviewTime = 4f;
     [SerializeField] private float mismatchDecreasePerLevel = 0.05f;
     [SerializeField] private float minMismatchDelay = 0.2f;
+
+    [Header("Moves")]
+    [SerializeField] private float baseMovesPerPair = 1.5f;
+    [SerializeField] private float bonusMoveChance = 0.35f;
+    [SerializeField] private int bonusMovesMin = 1;
+    [SerializeField] private int bonusMovesMax = 3;
 
     [Header("Layout")]
     [SerializeField] private bool randomizePositions = false;
@@ -46,6 +63,11 @@ public class MemoryGameController : MonoBehaviour
     private int startColumns;
     private float startPreviewTime;
     private float startMismatchDelay;
+    private int movesUsed;
+    private int movesLimit;
+    private int score;
+    private int comboStreak;
+    private Coroutine comboRoutine;
 
     private void Start()
     {
@@ -54,6 +76,12 @@ public class MemoryGameController : MonoBehaviour
         startColumns = columns;
         startPreviewTime = previewTime;
         startMismatchDelay = mismatchDelay;
+        UpdateScoreText();
+        UpdateMovesText();
+        if (comboText != null)
+        {
+            comboText.gameObject.SetActive(false);
+        }
         StartCoroutine(StartLevel());
     }
 
@@ -61,6 +89,7 @@ public class MemoryGameController : MonoBehaviour
     {
         ClearGrid();
         GenerateCards();
+        ResetLevelState();
 
         foreach (var card in cards)
         {
@@ -140,6 +169,8 @@ public class MemoryGameController : MonoBehaviour
         {
             secondSelection = card;
             secondSelection.Reveal();
+            movesUsed++;
+            UpdateMovesText();
             StartCoroutine(ResolveSelection());
         }
     }
@@ -153,9 +184,15 @@ public class MemoryGameController : MonoBehaviour
             firstSelection.Match();
             secondSelection.Match();
             matchedCount += 2;
+            comboStreak++;
+            int comboBonus = comboStreak > 1 ? comboBonusPerMatch * (comboStreak - 1) : 0;
+            score += scorePerMatch + comboBonus;
+            UpdateScoreText();
+            ShowCombo(comboStreak > 1);
         }
         else
         {
+            comboStreak = 0;
             yield return new WaitForSeconds(mismatchDelay);
             firstSelection.Hide();
             secondSelection.Hide();
@@ -163,12 +200,20 @@ public class MemoryGameController : MonoBehaviour
 
         firstSelection = null;
         secondSelection = null;
-        isBusy = false;
 
         if (matchedCount >= cards.Count)
         {
             StartCoroutine(AdvanceLevel());
+            yield break;
         }
+
+        if (movesUsed >= movesLimit)
+        {
+            StartCoroutine(RestartLevel());
+            yield break;
+        }
+
+        isBusy = false;
     }
 
     private IEnumerator AdvanceLevel()
@@ -177,6 +222,14 @@ public class MemoryGameController : MonoBehaviour
         yield return new WaitForSeconds(levelCompleteDelay);
         levelIndex++;
         ApplyDifficulty();
+        isBusy = false;
+        StartCoroutine(StartLevel());
+    }
+
+    private IEnumerator RestartLevel()
+    {
+        isBusy = true;
+        yield return new WaitForSeconds(levelFailedDelay);
         isBusy = false;
         StartCoroutine(StartLevel());
     }
@@ -190,6 +243,78 @@ public class MemoryGameController : MonoBehaviour
         int pairs = (rows * columns) / 2;
         previewTime = Mathf.Min(maxPreviewTime, startPreviewTime + (pairs * previewIncreasePerPair));
         mismatchDelay = Mathf.Max(minMismatchDelay, startMismatchDelay - (levelIndex * mismatchDecreasePerLevel));
+    }
+
+    private void ResetLevelState()
+    {
+        matchedCount = 0;
+        movesUsed = 0;
+        comboStreak = 0;
+        movesLimit = CalculateMovesLimit();
+        UpdateMovesText();
+        if (comboText != null)
+        {
+            comboText.gameObject.SetActive(false);
+        }
+    }
+
+    private int CalculateMovesLimit()
+    {
+        int pairs = (rows * columns) / 2;
+        int baseMoves = Mathf.Max(1, Mathf.CeilToInt(pairs * baseMovesPerPair));
+        if (Random.value < bonusMoveChance)
+        {
+            int bonus = Random.Range(bonusMovesMin, bonusMovesMax + 1);
+            baseMoves += bonus;
+        }
+
+        return baseMoves;
+    }
+
+    private void UpdateMovesText()
+    {
+        if (movesText != null)
+        {
+            movesText.text = $"Moves:\n{movesUsed}/{movesLimit}";
+        }
+    }
+
+    private void UpdateScoreText()
+    {
+        if (scoreText != null)
+        {
+            scoreText.text = $"Score:\n{score}";
+        }
+    }
+
+    private void ShowCombo(bool active)
+    {
+        if (comboText == null)
+        {
+            return;
+        }
+
+        if (!active)
+        {
+            comboText.gameObject.SetActive(false);
+            return;
+        }
+
+        comboText.gameObject.SetActive(true);
+        if (comboRoutine != null)
+        {
+            StopCoroutine(comboRoutine);
+        }
+        comboRoutine = StartCoroutine(HideComboAfterDelay());
+    }
+
+    private IEnumerator HideComboAfterDelay()
+    {
+        yield return new WaitForSeconds(comboDisplayTime);
+        if (comboText != null)
+        {
+            comboText.gameObject.SetActive(false);
+        }
     }
 
     private void RandomizeCardPositions()
